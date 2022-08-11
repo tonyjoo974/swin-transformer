@@ -621,15 +621,15 @@ def swin_model(pretrained=False, progress=True, **kwargs):
                             # patch_size=config.MODEL.SWIN.PATCH_SIZE,
                             # in_chans=config.MODEL.SWIN.IN_CHANS,
                             # num_classes=config.MODEL.NUM_CLASSES,
-                            # embed_dim=config.MODEL.SWIN.EMBED_DIM,
-                            # depths=config.MODEL.SWIN.DEPTHS,
-                            # num_heads=config.MODEL.SWIN.NUM_HEADS,
+                            embed_dim=128,
+                            depths=[2, 2, 18, 2],
+                            num_heads=[4, 8, 16, 32],
                             # window_size=config.MODEL.SWIN.WINDOW_SIZE,
                             # mlp_ratio=config.MODEL.SWIN.MLP_RATIO,
                             # qkv_bias=config.MODEL.SWIN.QKV_BIAS,
                             # qk_scale=config.MODEL.SWIN.QK_SCALE,
                             # drop_rate=config.MODEL.DROP_RATE,
-                            # drop_path_rate=config.MODEL.DROP_PATH_RATE,
+                            drop_path_rate=0.5,
                             # ape=config.MODEL.SWIN.APE,
                             norm_layer=layernorm,
                             # patch_norm=config.MODEL.SWIN.PATCH_NORM,
@@ -637,7 +637,7 @@ def swin_model(pretrained=False, progress=True, **kwargs):
                             fused_window_process=False)
     if pretrained:
         # model.load_state_dict(torch.load(PATH, map_location ='cpu'), strict=False)
-        state_dict = load_state_dict_from_url("https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth", map_location ='cpu')
+        state_dict = load_state_dict_from_url("https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224.pth", map_location ='cpu')
         model.load_state_dict(state_dict, strict=False)
     model.eval()
     return model
