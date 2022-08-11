@@ -10,7 +10,10 @@ import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 from torch.hub import load_state_dict_from_url
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from StonneUtils import getTileFileFromConvDimensions
 
+simulation_file = '../../../simulation_files/sigma_2048mses_2048_bw.cfg'
+tiles_path = 'tiles/accumulation_buffer/2048_mses'
 # try:
 #     import os, sys
 
@@ -29,9 +32,11 @@ class Mlp(nn.Module):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        tile1 = getTileFileFromConvDimensions(tiles_path, in_features, hidden_features, 1, 1)
+        tile2 = getTileFileFromConvDimensions(tiles_path, hidden_features, out_features, 1, 1)
+        self.fc1 = nn.SimulatedLinear(in_features, hidden_features, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0)
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.fc2 = nn.SimulatedLinear(hidden_features, out_features, path_to_arch_file=simulation_file, path_to_tile=tile2, sparsity_ratio=0.0)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
@@ -114,10 +119,11 @@ class WindowAttention(nn.Module):
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
         self.register_buffer("relative_position_index", relative_position_index)
-
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        tile1 = getTileFileFromConvDimensions(tiles_path, dim, dim * 3, 1, 1)
+        tile2 = getTileFileFromConvDimensions(tiles_path, dim, dim, 1, 1)
+        self.qkv = nn.SimulatedLinear(dim, dim * 3, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.SimulatedLinear(dim, dim, path_to_arch_file=simulation_file, path_to_tile=tile2, sparsity_ratio=0.0)
         self.proj_drop = nn.Dropout(proj_drop)
 
         trunc_normal_(self.relative_position_bias_table, std=.02)
@@ -326,7 +332,8 @@ class PatchMerging(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
-        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
+        tile1 = getTileFileFromConvDimensions(tiles_path, 4 * dim, 2 * dim, 1, 1)
+        self.reduction = nn.SimulatedLinear(4 * dim, 2 * dim, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0, bias=False)
         self.norm = norm_layer(4 * dim)
 
     def forward(self, x):
@@ -458,8 +465,9 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        tile1 = getTileFileFromConvDimensions(tiles_path, in_chans, embed_dim, patch_size, 1)
+        self.conv1 = nn.SimulatedConv2d(in_chans, embed_dim, kernel_size=patch_size, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0, stride=patch_size)
+        # self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -565,14 +573,15 @@ class SwinTransformer(nn.Module):
 
         self.norm = norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        tile1 = getTileFileFromConvDimensions(tiles_path, self.num_features, num_classes, 1, 1)
+        self.head = nn.SimulatedLinear(self.num_features, num_classes, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
+        if isinstance(m, nn.Linear) or isinstance(m, nn.SimulatedLinear):
             trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if (isinstance(m, nn.Linear) or isinstance(m, nn.SimulatedLinear)) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
