@@ -466,7 +466,7 @@ class PatchEmbed(nn.Module):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
         tile1 = getTileFileFromConvDimensions(tiles_path, in_chans, embed_dim, patch_size, 1)
-        self.conv1 = nn.SimulatedConv2d(in_chans, embed_dim, kernel_size=patch_size, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0, stride=patch_size)
+        self.proj = nn.SimulatedConv2d(in_chans, embed_dim, kernel_size=patch_size, path_to_arch_file=simulation_file, path_to_tile=tile1, sparsity_ratio=0.0, stride=patch_size)
         # self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
